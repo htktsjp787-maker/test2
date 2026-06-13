@@ -1,11 +1,393 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+<meta charset="UTF-8">
+<title>제주 주요 장소 지도</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    display: flex;
+    height: 100vh;
+    background: #fdf6f0;
+  }
+  #sidebar {
+    width: 300px;
+    background: #ffffff;
+    padding: 24px;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.06);
+    overflow-y: auto;
+    z-index: 1000;
+  }
+  #sidebar h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+    color: #ff6b6b;
+  }
+  #sidebar .subtitle {
+    font-size: 13px;
+    color: #999;
+    margin-bottom: 20px;
+  }
+  .place-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 14px;
+    margin-bottom: 10px;
+    background: #fef9f4;
+    border: 1px solid #ffe3d8;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .place-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(255,107,107,0.15);
+  }
+  .place-card .emoji {
+    font-size: 22px;
+  }
+  .place-card .label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #555;
+  }
+  .section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ff9f43;
+    margin: 24px 0 10px;
+  }
+  .dist-card {
+    background: #fff3e0;
+    border-radius: 14px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: #666;
+    display: flex;
+    justify-content: space-between;
+  }
+  .dist-card b {
+    color: #ff6b6b;
+  }
+  #map {
+    flex: 1;
+    height: 100vh;
+  }
+  .leaflet-popup-content-wrapper {
+    border-radius: 12px;
+  }
+  .custom-pin {
+    background: #ff6b6b;
+    width: 28px;
+    height: 28px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    border: 2px solid white;
+  }
+  .custom-pin span {
+    transform: rotate(45deg);
+    font-size: 14px;
+  }
+  .custom-pin.airport { background: #4b7bec; }
+  .custom-pin.school { background: #fd9644; }
+  .custom-pin.univ { background: #20bf6b; }
+  .leaflet-overlay-pane path {
+    transition: opacity 0.3s ease;
+  }
+  #place-detail {
+    display: none;
+    background: #f6fff9;
+    border: 1px solid #d6f5e3;
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 16px;
+    animation: fadeIn 0.25s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  #place-detail h3 {
+    margin: 0 0 6px;
+    font-size: 15px;
+    color: #333;
+  }
+  #place-detail .desc {
+    font-size: 12.5px;
+    color: #777;
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+  #place-detail .info-row {
+    font-size: 12px;
+    color: #555;
+    margin-bottom: 4px;
+  }
+  #place-detail .food-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #20bf6b;
+    margin: 10px 0 6px;
+  }
+  #place-detail .food-item {
+    font-size: 12px;
+    color: #666;
+    padding: 6px 10px;
+    background: #fff;
+    border-radius: 10px;
+    margin-bottom: 6px;
+  }
+  #place-detail .close-btn {
+    float: right;
+    cursor: pointer;
+    color: #bbb;
+    font-size: 14px;
+  }
+</style>
 </head>
 <body>
-    <h1>hello world</h1>
+
+<div id="sidebar">
+  <h1>🌴 제주 주요 장소</h1>
+  <div class="subtitle">마커를 클릭하면 지도가 이동해요</div>
+
+  <div id="place-detail"></div>
+
+  <div class="place-card" onclick="focusPlace('airport')">
+    <div class="emoji">✈️</div>
+    <div class="label">제주국제공항</div>
+  </div>
+  <div class="place-card" onclick="focusPlace('school')">
+    <div class="emoji">🏫</div>
+    <div class="label">제주중앙여자고등학교</div>
+  </div>
+  <div class="place-card" onclick="focusPlace('university')">
+    <div class="emoji">🎓</div>
+    <div class="label">제주대학교</div>
+  </div>
+
+  <div class="section-title">📏 거리 정보</div>
+  <div id="distances"></div>
+
+  <div class="section-title">🚌 버스 정보</div>
+  <div class="dist-card" style="display:block;">
+    <b>455번</b> (간선버스)<br>
+    제주대 ↔ 제주시청 ↔ 제주국제공항
+  </div>
+  <div class="dist-card" style="display:block;">
+    <b>600번</b> (공항리무진)<br>
+    제주국제공항 ↔ 신제주 ↔ 중문/서귀포 (06:00~21:50, 18~27분 간격)
+  </div>
+  <div style="font-size:11px; color:#aaa; margin-top:6px;">
+    ※ 정확한 노선·시간은 제주버스정보시스템(bus.jeju.go.kr)에서 확인하세요.
+  </div>
+
+  <div class="section-title">💡 알아두면 좋은 정보</div>
+  <div class="dist-card" style="display:block;">
+    📶 공항 무료 와이파이: 'Jeju_Airport Free Wi-Fi' / 'Jeju Free Wifi'
+  </div>
+  <div class="dist-card" style="display:block;">
+    🧳 공항 수하물 보관: 06:00~21:20 운영
+  </div>
+  <div class="dist-card" style="display:block;">
+    🌸 제주대학교 정문 가로수길은 봄철 벚꽃 명소
+  </div>
+</div>
+
+<div id="map"></div>
+
+<script>
+  const places = {
+    airport: {
+      name: "제주국제공항", coords: [33.5066, 126.4929], emoji: "✈️", cls: "airport",
+      desc: "제주특별자치도 제주시 공항로 2에 위치한 제주의 관문 공항입니다. 국내선과 국제선이 운항되며, 렌터카·리무진버스·택시 등 다양한 교통수단을 이용할 수 있습니다.",
+      info: [
+        "🅿️ 주차장: P1(여객터미널), P2(장기), 화물·직원 주차장 등 총 약 4,000면 규모",
+        "📶 무료 와이파이: 'Jeju_Airport Free Wi-Fi' 또는 'Jeju Free Wifi' 검색 후 연결",
+        "🧳 수하물 보관소: 국내선 1층 5번 게이트·3층 4번 게이트 인근, 운영시간 06:00~21:20"
+      ],
+      food: []
+    },
+    school: {
+      name: "제주중앙여자고등학교", coords: [33.4996, 126.5331], emoji: "🏫", cls: "school",
+      desc: "제주특별자치도 제주시 구남동5길 11(이도이동)에 위치한 공립 여자고등학교입니다. 1979년 설립되었으며, 제주 시내 중심가에 가까워 통학이 편리합니다.",
+      info: [
+        "📍 주소: 제주특별자치도 제주시 구남동5길 11",
+        "👩‍🎓 학생수 약 1,169명 (전원 여학생), 교원수 약 104명",
+        "📞 대표전화: 064-717-3100"
+      ],
+      food: []
+    },
+    university: {
+      name: "제주대학교", coords: [33.4569, 126.5598], emoji: "🎓", cls: "univ",
+      desc: "제주특별자치도 제주시 제주대학로 102(아라일동)에 위치한 제주 유일의 4년제 국립대학교입니다. 해발 약 400m의 중산간 숲속 캠퍼스로, 정문 앞 가로수길은 봄철 벚꽃 명소이기도 합니다.",
+      info: [
+        "📍 주소: 제주특별자치도 제주시 제주대학로 102 (아라캠퍼스)",
+        "📞 대표전화: 064-754-2114",
+        "🚌 제주 시내버스 다수 노선이 제주대를 종점으로 운행"
+      ],
+      food: []
+    }
+  };
+
+  const map = L.map('map').setView([33.4890, 126.5200], 12);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  const markers = {};
+  for (const key in places) {
+    const p = places[key];
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="custom-pin ${p.cls}"><span>${p.emoji}</span></div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 28]
+    });
+    markers[key] = L.marker(p.coords, { icon }).addTo(map).bindPopup(`<b>${p.name}</b>`);
+    markers[key].on('click', () => showPlaceDetail(key));
+  }
+
+  function showPlaceDetail(key) {
+    const p = places[key];
+    const panel = document.getElementById('place-detail');
+    panel.innerHTML = `
+      <span class="close-btn" onclick="document.getElementById('place-detail').style.display='none'">✕</span>
+      <h3>${p.emoji} ${p.name}</h3>
+      <div class="desc">${p.desc}</div>
+      ${p.info.map(i => `<div class="info-row">${i}</div>`).join('')}
+      ${p.food.length ? `<div class="food-title">🍽️ 주변 정보</div>${p.food.map(f => `<div class="food-item">${f}</div>`).join('')}` : ''}
+    `;
+    panel.style.display = 'block';
+  }
+
+  function focusPlace(key) {
+    map.flyTo(places[key].coords, 15, { duration: 1 });
+    markers[key].openPopup();
+    showPlaceDetail(key);
+  }
+
+  function distance(a, b) {
+    return (map.distance(a, b) / 1000).toFixed(2);
+  }
+
+  const pairs = [
+    ["airport", "school", "공항 ↔ 중앙여고"],
+    ["airport", "university", "공항 ↔ 제주대"],
+    ["school", "university", "중앙여고 ↔ 제주대"]
+  ];
+
+  const distDiv = document.getElementById('distances');
+  pairs.forEach(([a, b, label]) => {
+    const d = distance(places[a].coords, places[b].coords);
+    const id = `${a}-${b}`;
+    distDiv.innerHTML += `<div class="dist-card" style="cursor:pointer;" onclick="isolateLine('${id}')" title="클릭하면 이 경로만 표시됩니다"><span>${label}</span><b id="dist-${id}">${d} km (직선)</b></div>`;
+  });
+
+  const lineDefs = [
+    { keys: ["airport","school"], color: '#fd9644' },
+    { keys: ["airport","university"], color: '#4b7bec' },
+    { keys: ["school","university"], color: '#20bf6b' }
+  ];
+
+  const lineLayers = {};
+
+  async function drawRoute(def) {
+    const a = places[def.keys[0]].coords;
+    const b = places[def.keys[1]].coords;
+    const id = def.keys.join('-');
+    const url = `https://router.project-osrm.org/route/v1/driving/${a[1]},${a[0]};${b[1]},${b[0]}?overview=full&geometries=geojson`;
+
+    let line, label, km;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+      km = (data.routes[0].distance / 1000).toFixed(2);
+
+      line = L.polyline(coords, { color: def.color, weight: 5, opacity: 0.85 });
+      const mid = coords[Math.floor(coords.length / 2)];
+      label = L.marker(mid, {
+        icon: L.divIcon({
+          className: '',
+          html: `<div style="background:${def.color};color:white;font-size:11px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,0.25);">${km} km</div>`,
+          iconSize: [50, 20],
+          iconAnchor: [25, 10]
+        }),
+        interactive: false
+      });
+
+      updateDistanceCard(def.keys, km + ' km (도로)');
+    } catch (e) {
+      km = distance(a, b);
+      line = L.polyline([a, b], { color: def.color, weight: 5, opacity: 0.85, dashArray: '6 6' });
+      label = null;
+      updateDistanceCard(def.keys, km + ' km (직선)');
+    }
+
+    line.on('click', (e) => { L.DomEvent.stopPropagation(e); isolateLine(id); });
+    lineLayers[id] = { line, label, visible: true };
+    line.addTo(map);
+    if (label) label.addTo(map);
+  }
+
+  function isolateLine(id) {
+    const allVisible = Object.values(lineLayers).every(l => l.visible);
+    for (const key in lineLayers) {
+      const l = lineLayers[key];
+      const shouldShow = allVisible ? (key === id) : true;
+      animateLine(l, shouldShow);
+    }
+  }
+
+  function resetLines() {
+    for (const key in lineLayers) {
+      animateLine(lineLayers[key], true);
+    }
+  }
+
+  function animateLine(l, show) {
+    if (show && !l.visible) {
+      l.line.setStyle({ opacity: 0 });
+      l.line.addTo(map);
+      if (l.label) { l.label.addTo(map); l.label.getElement().style.opacity = 0; }
+      requestAnimationFrame(() => {
+        l.line.setStyle({ opacity: 0.85 });
+        if (l.label) l.label.getElement().style.transition = 'opacity 0.3s';
+        if (l.label) l.label.getElement().style.opacity = 1;
+      });
+      l.visible = true;
+    } else if (!show && l.visible) {
+      l.line.setStyle({ opacity: 0 });
+      if (l.label) l.label.getElement().style.opacity = 0;
+      setTimeout(() => {
+        map.removeLayer(l.line);
+        if (l.label) map.removeLayer(l.label);
+      }, 300);
+      l.visible = false;
+    }
+  }
+
+  map.on('click', resetLines);
+
+  function updateDistanceCard(keys, text) {
+    const id = 'dist-' + keys.join('-');
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  lineDefs.forEach(drawRoute);
+</script>
 </body>
 </html>
